@@ -1,16 +1,17 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:wc_2026_mobile/ui/splash/splash_screen.dart';
+import 'package:wc_2026_mobile/routing/router.dart';
 
 import '../ui/core/theme/app_theme.dart';
 
 class const MainApp({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       theme: AppTheme.light,
-      home: const Scaffold(
-        body: SplashScreen(),
-      ),
+      builder: (context, child) {
+        return MaterialUiCompatibilityBridge(child: child!);
+      },
+      routerConfig: router(),
     );
   }
 }
