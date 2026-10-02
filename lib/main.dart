@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'config/application_bindings.dart';
 import 'app/main_app.dart';
 
 void main() {
-  runApp(const MainApp());
+  runApp(ApplicationBindings(child: const MainApp()));
 }
