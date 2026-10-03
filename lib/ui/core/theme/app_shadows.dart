@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-abstract final class AppShadows {
+final class AppShadows._() {
   static const xs = <BoxShadow>[
     BoxShadow(color: Color(0x14000000), offset: Offset(0, 2), blurRadius: 6),
   ];
