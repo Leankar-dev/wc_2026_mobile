@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/ui/sticker/register/sticker_register_screen.dart';
 import 'package:wc_2026_mobile/ui/sticker/register/widgets/code_field.dart';
+import 'package:wc_2026_mobile/ui/sticker/register/widgets/header.dart';
 import 'package:wc_2026_mobile/ui/sticker/register/widgets/keypad.dart';
+import 'package:wc_2026_mobile/ui/sticker/register/widgets/preview_card.dart';
 
 Widget _host() => flutter.MaterialApp(
   builder: (context, child) => MediaQuery(
@@ -45,12 +47,73 @@ ScrollableState _scrollable(WidgetTester tester) =>
 
 void main() {
   group('StickerRegisterScreen', () {
-    testWidgets('shows an app bar', (tester) async {
+    testWidgets('shows the header instead of an app bar', (tester) async {
       _useScreen(tester);
 
       await tester.pumpWidget(_host());
 
-      expect(find.byType(flutter.AppBar), findsOneWidget);
+      expect(find.byType(Header), findsOneWidget);
+      expect(find.byType(flutter.AppBar), findsNothing);
+      expect(find.text('ADICIONAR'), findsOneWidget);
+      expect(find.text('FIGURINHA'), findsOneWidget);
+    });
+
+    testWidgets('shows the preview card inside the header', (tester) async {
+      _useScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(
+        find.descendant(
+          of: find.byType(Header),
+          matching: find.byType(PreviewCard),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows a fixed demo match in the preview for now', (
+      tester,
+    ) async {
+      _useScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(find.text('BRASIL'), findsOneWidget);
+      expect(find.text('SELEÇÃO'), findsOneWidget);
+      expect(find.text('01'), findsOneWidget);
+      expect(find.text('Brasil'), findsOneWidget);
+      expect(find.text('DIGITE O CÓDIGO'), findsNothing);
+    });
+
+    testWidgets('does nothing when the back arrow is tapped for now', (
+      tester,
+    ) async {
+      _useScreen(tester);
+
+      await tester.pumpWidget(_host());
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pump();
+
+      expect(find.byType(StickerRegisterScreen), findsOneWidget);
+    });
+
+    testWidgets('stacks the header, the field and the keypads', (
+      tester,
+    ) async {
+      _useScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final tops = [
+        tester.getTopLeft(find.byType(Header)).dy,
+        tester.getTopLeft(find.byType(CodeField)).dy,
+        tester.getTopLeft(find.byType(Keypad).first).dy,
+        tester.getTopLeft(find.byType(Keypad).last).dy,
+      ];
+
+      expect(tops, [...tops]..sort());
+      expect(tops.toSet(), hasLength(4));
     });
 
     testWidgets('shows the code field with six boxes', (tester) async {
