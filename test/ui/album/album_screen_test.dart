@@ -8,15 +8,20 @@ import 'package:wc_2026_mobile/core/result.dart';
 import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
 import 'package:wc_2026_mobile/data/repositories/team/team_repository.dart';
 import 'package:wc_2026_mobile/domain/models/album/album.dart';
+import 'package:wc_2026_mobile/domain/models/album/album_position.dart';
 import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
 import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
 import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
+import 'package:wc_2026_mobile/domain/models/album/team_album_group.dart';
 import 'package:wc_2026_mobile/domain/models/team/team.dart';
 import 'package:wc_2026_mobile/routing/routes.dart';
+import 'package:wc_2026_mobile/ui/core/share/app_loading.dart';
+import 'package:wc_2026_mobile/ui/core/share/error_indicator.dart';
 import 'package:wc_2026_mobile/ui/album/album_screen.dart';
 import 'package:wc_2026_mobile/ui/album/album_view_model.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/filter_tabs.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/header.dart';
+import 'package:wc_2026_mobile/ui/album/widgets/sticker_tile.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_selection.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_strip.dart';
 
@@ -24,13 +29,16 @@ class _FakeAlbumRepository implements AlbumRepository {
   Result<AlbumSummary> summary = Result.ok(
     const AlbumSummary(total: 980, missing: 300, repeated: 12),
   );
+  Result<Album> album = Result.ok(const Album(teams: [], loose: []));
+  Completer<void>? gate;
   final albumCalls = <({StickerStatus? status, String? team})>[];
   var summaryCalls = 0;
 
   @override
   Future<Result<Album>> getAlbum({StickerStatus? status, String? team}) async {
     albumCalls.add((status: status, team: team));
-    return Result.ok(const Album(teams: [], loose: []));
+    await gate?.future;
+    return album;
   }
 
   @override
@@ -190,11 +198,171 @@ void main() {
       expect(find.byType(TeamStrip), findsNothing);
       expect(find.byType(FilterTabs), findsOneWidget);
     });
+  });
 
-    testWidgets('keeps the example blocks of teams', (tester) async {
+  group('AlbumScreen album', () {
+    AlbumPosition position(
+      String code,
+      int number, {
+      StickerStatus status = StickerStatus.missing,
+      int repeated = 0,
+    }) => AlbumPosition(
+      code: code,
+      number: number,
+      status: status,
+      repeated: repeated,
+    );
+
+    Album album() => Album(
+      teams: [
+        TeamAlbumGroup(
+          team: _brazil,
+          stickers: [
+            position('BRA-1', 1, status: StickerStatus.owned),
+            position('BRA-2', 2),
+          ],
+        ),
+        TeamAlbumGroup(
+          team: _argentina,
+          stickers: [
+            position('ARG-1', 1, status: StickerStatus.repeated, repeated: 1),
+            position('ARG-2', 2, status: StickerStatus.owned),
+            position('ARG-3', 3),
+          ],
+        ),
+      ],
+      loose: [position('FWC-1', 1)],
+    );
+
+    testWidgets('shows the empty message when there are no stickers', (
+      tester,
+    ) async {
       await _openAlbum(tester);
 
-      expect(find.byType(TeamSelection), findsNWidgets(2));
+      expect(find.text('Nenhuma figurinha neste recorte'), findsOneWidget);
+      expect(find.byType(TeamSelection), findsNothing);
+    });
+
+    testWidgets('shows the loader while the album loads', (tester) async {
+      _albums.gate = Completer<void>();
+
+      await _openAlbum(tester);
+
+      expect(find.byType(AppLoading), findsOneWidget);
+      expect(find.text('Nenhuma figurinha neste recorte'), findsNothing);
+
+      _albums.gate!.complete();
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(AppLoading), findsNothing);
+    });
+
+    testWidgets('shows the error message and retries the album', (
+      tester,
+    ) async {
+      _albums.album = Result.error(const NetworkException());
+      await _openAlbum(tester);
+
+      expect(find.byType(ErrorIndicator), findsOneWidget);
+      expect(
+        find.text('Sem conexão. Verifique sua internet e tente novamente.'),
+        findsOneWidget,
+      );
+
+      _albums.album = Result.ok(album());
+      await tester.tap(find.text('Tentar Novamente'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(_albums.albumCalls, hasLength(2));
+      expect(find.byType(ErrorIndicator), findsNothing);
+      expect(find.byType(TeamSelection), findsNWidgets(3));
+    });
+
+    testWidgets('shows one block per team and one for the special ones', (
+      tester,
+    ) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+
+      final blocks = tester
+          .widgetList<TeamSelection>(find.byType(TeamSelection))
+          .toList();
+
+      expect(blocks.map((block) => block.name), [
+        'Brazil',
+        'Argentina',
+        'ESPECIAIS',
+      ]);
+      expect(blocks.map((block) => block.progress), [
+        '1 / 2',
+        '2 / 3',
+        '0 / 1',
+      ]);
+    });
+
+    testWidgets('shows one tile per sticker with its collected state', (
+      tester,
+    ) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+
+      final tiles = tester
+          .widgetList<StickerTile>(find.byType(StickerTile))
+          .toList();
+
+      expect(tiles, hasLength(6));
+      expect(tiles.where((tile) => tile.collected), hasLength(3));
+      expect(find.text('— FALTANDO —'), findsNWidgets(3));
+    });
+
+    testWidgets('keeps the blocks when the search text changes', (
+      tester,
+    ) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+      await tester.enterText(find.byType(TextField), 'argentina');
+      await tester.pump();
+
+      expect(find.byType(TeamSelection), findsNWidgets(3));
+    });
+
+    testWidgets('clears the team filter when the same team is tapped twice', (
+      tester,
+    ) async {
+      _albums.album = Result.ok(album());
+      await _openAlbum(tester);
+      _albums.albumCalls.clear();
+
+      await tester.tap(_discs.at(0));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(_discs.at(0));
+      await tester.pump();
+      await tester.pump();
+
+      expect(_viewModel.teamCode, isNull);
+      expect(_albums.albumCalls, [
+        (status: null, team: 'BRA'),
+        (status: null, team: null),
+      ]);
+      expect(tester.widget<TeamStrip>(find.byType(TeamStrip)).selected, isNull);
+    });
+
+    testWidgets('keeps the blocks after a status filter loads', (tester) async {
+      _albums.album = Result.ok(album());
+      await _openAlbum(tester);
+
+      await tester.tap(find.text('FALTANDO'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(TeamSelection), findsNWidgets(3));
+      expect(_viewModel.status, StickerStatus.missing);
     });
   });
 

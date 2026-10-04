@@ -1,15 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/core/exceptions/app_exception.dart';
 import 'package:wc_2026_mobile/core/result.dart';
 import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
 import 'package:wc_2026_mobile/data/repositories/team/team_repository.dart';
 import 'package:wc_2026_mobile/domain/models/album/album.dart';
+import 'package:wc_2026_mobile/domain/models/album/album_position.dart';
 import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
 import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
 import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
+import 'package:wc_2026_mobile/domain/models/album/team_album_group.dart';
 import 'package:wc_2026_mobile/domain/models/team/team.dart';
+import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/album/album_view_model.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
@@ -277,7 +281,7 @@ void main() {
       expect(albumRepository.albumCalls, [(status: null, team: 'BRA')]);
     });
 
-    test('toggleTeam ignores the team that is already selected', () async {
+    test('toggleTeam clears the team that is already selected', () async {
       viewModel.toggleTeam('BRA');
       await _settle();
       albumRepository.albumCalls.clear();
@@ -285,8 +289,9 @@ void main() {
       viewModel.toggleTeam('BRA');
       await _settle();
 
-      expect(viewModel.teamCode, 'BRA');
-      expect(albumRepository.albumCalls, isEmpty);
+      expect(viewModel.teamCode, isNull);
+      expect(viewModel.filtered, isFalse);
+      expect(albumRepository.albumCalls, [(status: null, team: null)]);
     });
 
     test('toggleTeam switches to another team', () async {
@@ -380,6 +385,228 @@ void main() {
       await viewModel.refresh();
 
       expect(viewModel.counts?.missing, 100);
+    });
+  });
+
+  group('AlbumViewModel sections', () {
+    AlbumPosition position(
+      String code,
+      int number, {
+      StickerStatus status = StickerStatus.missing,
+      int repeated = 0,
+    }) => AlbumPosition(
+      code: code,
+      number: number,
+      status: status,
+      repeated: repeated,
+    );
+
+    Future<void> loadAlbum(Album album) async {
+      albumRepository.album = Result.ok(album);
+      viewModel.init();
+      await _settle();
+    }
+
+    test('has no sections before the album loads', () {
+      expect(viewModel.sectionsMatching(''), isEmpty);
+    });
+
+    test('has no sections when the album is empty', () async {
+      await loadAlbum(const Album(teams: [], loose: []));
+
+      expect(viewModel.sectionsMatching(''), isEmpty);
+    });
+
+    test('has no sections when the album fails', () async {
+      albumRepository.album = Result.error(const NetworkException());
+      viewModel.init();
+      await _settle();
+
+      expect(viewModel.sectionsMatching(''), isEmpty);
+    });
+
+    test('builds one section per team with its name, flag and color', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(team: _brazil, stickers: [position('BRA-1', 1)]),
+            TeamAlbumGroup(team: _argentina, stickers: [position('ARG-1', 1)]),
+          ],
+          loose: const [],
+        ),
+      );
+
+      final sections = viewModel.sectionsMatching('');
+
+      expect(sections.map((s) => s.name), ['Brazil', 'Argentina']);
+      expect(sections.map((s) => s.flagPath), [
+        '/flags/bra.png',
+        '/flags/arg.png',
+      ]);
+      expect(sections.map((s) => s.color), [
+        Color(0xFFFFDF00),
+        Color(0xFF6CACE4),
+      ]);
+    });
+
+    test('adds the special section after the teams', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(team: _brazil, stickers: [position('BRA-1', 1)]),
+          ],
+          loose: [position('FWC-1', 1)],
+        ),
+      );
+
+      final sections = viewModel.sectionsMatching('');
+
+      expect(sections.map((s) => s.name), ['Brazil', 'ESPECIAIS']);
+      expect(sections.last.flagPath, isNull);
+      expect(sections.last.color, AppColors.ink);
+    });
+
+    test('skips teams without stickers and an empty special list', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(team: _brazil, stickers: const []),
+            TeamAlbumGroup(team: _argentina, stickers: [position('ARG-1', 1)]),
+          ],
+          loose: const [],
+        ),
+      );
+
+      expect(viewModel.sectionsMatching('').map((s) => s.name), ['Argentina']);
+    });
+
+    test('counts the owned and repeated stickers as collected', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(
+              team: _brazil,
+              stickers: [
+                position('BRA-1', 1, status: StickerStatus.owned),
+                position(
+                  'BRA-2',
+                  2,
+                  status: StickerStatus.repeated,
+                  repeated: 2,
+                ),
+                position('BRA-3', 3),
+                position('BRA-4', 4),
+              ],
+            ),
+          ],
+          loose: const [],
+        ),
+      );
+
+      final section = viewModel.sectionsMatching('').single;
+
+      expect(section.progress, '2 / 4');
+      expect(section.stickers.map((s) => s.collected), [
+        true,
+        true,
+        false,
+        false,
+      ]);
+    });
+
+    test('maps each sticker to its view', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(
+              team: _brazil,
+              stickers: [
+                position(
+                  'BRA-7',
+                  7,
+                  status: StickerStatus.repeated,
+                  repeated: 2,
+                ),
+                position('BRA-8', 8),
+              ],
+            ),
+          ],
+          loose: const [],
+        ),
+      );
+
+      final stickers = viewModel.sectionsMatching('').single.stickers;
+
+      expect(stickers.first, (
+        code: 'BRA-7',
+        number: 7,
+        label: 'BRA',
+        collected: true,
+        count: 3,
+        player: 'JOGADOR 7',
+      ));
+      expect(stickers.last, (
+        code: 'BRA-8',
+        number: 8,
+        label: 'BRA',
+        collected: false,
+        count: 0,
+        player: 'JOGADOR 8',
+      ));
+    });
+
+    test('labels the special stickers as special', () async {
+      await loadAlbum(Album(teams: const [], loose: [position('FWC-3', 3)]));
+
+      final sticker = viewModel.sectionsMatching('').single.stickers.single;
+
+      expect(sticker.label, 'FWC');
+      expect(sticker.player, 'ESPECIAL 3');
+    });
+
+    test('isCollected is false only for missing stickers', () {
+      expect(viewModel.isCollected(position('A-1', 1)), isFalse);
+      expect(
+        viewModel.isCollected(position('A-1', 1, status: StickerStatus.owned)),
+        isTrue,
+      );
+      expect(
+        viewModel.isCollected(
+          position('A-1', 1, status: StickerStatus.repeated),
+        ),
+        isTrue,
+      );
+    });
+
+    test('ignores the search term for now', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(team: _brazil, stickers: [position('BRA-1', 1)]),
+            TeamAlbumGroup(team: _argentina, stickers: [position('ARG-1', 1)]),
+          ],
+          loose: const [],
+        ),
+      );
+
+      expect(viewModel.sectionsMatching('argentina'), hasLength(2));
+      expect(viewModel.sectionsMatching('   '), hasLength(2));
+    });
+
+    test('shows a partial progress when a status filter is active', () async {
+      await loadAlbum(
+        Album(
+          teams: [
+            TeamAlbumGroup(
+              team: _brazil,
+              stickers: [position('BRA-3', 3), position('BRA-4', 4)],
+            ),
+          ],
+          loose: const [],
+        ),
+      );
+
+      expect(viewModel.sectionsMatching('').single.progress, '0 / 2');
     });
   });
 }
