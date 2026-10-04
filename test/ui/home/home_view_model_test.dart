@@ -3,8 +3,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/core/exceptions/app_exception.dart';
 import 'package:wc_2026_mobile/core/result.dart';
 import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
+import 'package:wc_2026_mobile/domain/models/album/album.dart';
 import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
 import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
+import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
 import 'package:wc_2026_mobile/domain/models/team/team.dart';
 import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/home/home_view_model.dart';
@@ -28,6 +30,10 @@ class _FakeAlbumRepository implements AlbumRepository {
     recentCalls++;
     return recent;
   }
+
+  @override
+  Future<Result<Album>> getAlbum({StickerStatus? status, String? team}) async =>
+      Result.ok(const Album(teams: [], loose: []));
 }
 
 const _team = Team(
