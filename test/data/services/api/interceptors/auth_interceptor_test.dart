@@ -55,17 +55,21 @@ class _RecordingAdapter implements HttpClientAdapter {
 
 void main() {
   late _RecordingAdapter adapter;
+  late List<void> unauthorizedEvents;
 
   Dio buildDio({required int status, Map<String, String> stored = const {}}) {
     adapter = _RecordingAdapter(status);
+    unauthorizedEvents = [];
     final storage = SecureStorageService(
       storage: _FakeSecureStorage(Map.of(stored)),
     );
+    final interceptor = AuthInterceptor(storage: storage);
+    interceptor.onUnauthorized.listen(unauthorizedEvents.add);
     return Dio(
         BaseOptions(validateStatus: (code) => code != null && code < 400),
       )
       ..httpClientAdapter = adapter
-      ..interceptors.add(AuthInterceptor(storage: storage));
+      ..interceptors.add(interceptor);
   }
 
   group('AuthInterceptor', () {
@@ -138,6 +142,65 @@ void main() {
         ),
         throwsA(isA<DioException>()),
       );
+    });
+
+    for (final status in [401, 403]) {
+      test('emits onUnauthorized on $status with a token', () async {
+        final dio = buildDio(
+          status: status,
+          stored: {StorageKeys.authToken: 'abc'},
+        );
+
+        await expectLater(
+          dio.get<dynamic>('/private'),
+          throwsA(isA<DioException>()),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(unauthorizedEvents, hasLength(1));
+      });
+    }
+
+    test('does not emit onUnauthorized on 401 of a public route', () async {
+      final dio = buildDio(
+        status: 401,
+        stored: {StorageKeys.authToken: 'abc'},
+      );
+
+      await expectLater(
+        dio.get<dynamic>(
+          '/public',
+          options: Options(extra: AuthInterceptor.publicRoute),
+        ),
+        throwsA(isA<DioException>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(unauthorizedEvents, isEmpty);
+    });
+
+    test('does not emit onUnauthorized on 401 without a token', () async {
+      final dio = buildDio(status: 401);
+
+      await expectLater(
+        dio.get<dynamic>('/private'),
+        throwsA(isA<DioException>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(unauthorizedEvents, isEmpty);
+    });
+
+    test('does not emit onUnauthorized on a successful call', () async {
+      final dio = buildDio(
+        status: 200,
+        stored: {StorageKeys.authToken: 'abc'},
+      );
+
+      await dio.get<dynamic>('/private');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(unauthorizedEvents, isEmpty);
     });
 
     test('dispose does nothing', () {

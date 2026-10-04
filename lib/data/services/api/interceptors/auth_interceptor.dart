@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:wc_2026_mobile/core/logging/app_logger.dart';
 import 'package:wc_2026_mobile/data/services/local/secure_storage_service.dart';
@@ -11,6 +13,10 @@ class AuthInterceptor({required final SecureStorageService _storage})
   static const _sessionEndedStatus = {401, 403};
 
   final _log = AppLogger('AuthInterceptor');
+
+  final _unauthorized = StreamController.broadcast();
+
+  Stream<void> get onUnauthorized => _unauthorized.stream;
 
   @override
   Future<void> onRequest(
@@ -32,7 +38,8 @@ class AuthInterceptor({required final SecureStorageService _storage})
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (_endsSession(err)) {
-      _log.info('Backend recursou o token');
+      _log.info('Backend recusou o token');
+      _unauthorized.add(null);
     }
     handler.next(err);
   }

@@ -10,8 +10,10 @@ import 'package:wc_2026_mobile/domain/use_cases/auth/auth_restore_session_use_ca
 class AuthSessionNotifier({
   required final AuthLogoutUseCase _authLogoutUseCase,
   required final AuthRestoreSessionUseCase _authRestoreSessionUseCase,
+  required final Stream<void> sessionEnded,
 }) extends ChangeNotifier {
   final _log = AppLogger('AuthSessionNotifier');
+  late final StreamSubscription<void> _sessionEnded;
 
   AuthSessionUser? _user;
   var _restored = false;
@@ -22,6 +24,17 @@ class AuthSessionNotifier({
 
   this {
     unawaited(_restore());
+
+    _sessionEnded = sessionEnded.listen((_) {
+      _log.info('Backend Encerrou a sessão');
+      unawaited(logout());
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionEnded.cancel();
+    super.dispose();
   }
 
   Future<void> _restore() async {
