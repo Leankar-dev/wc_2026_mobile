@@ -24,6 +24,8 @@ import 'package:wc_2026_mobile/ui/album/widgets/header.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/sticker_tile.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_selection.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_strip.dart';
+import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
   Result<AlbumSummary> summary = Result.ok(
@@ -95,6 +97,26 @@ Widget _app(GoRouter router) => MaterialApp.router(
   ),
 );
 
+DetailArgs? _receivedArgs;
+
+class _DetailProbe extends StatelessWidget {
+  const _DetailProbe({required this.args});
+
+  final DetailArgs args;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('detail ${args.code}'),
+        TextButton(onPressed: () => context.pop(true), child: Text('save')),
+        TextButton(onPressed: () => context.pop(false), child: Text('discard')),
+        TextButton(onPressed: () => context.pop(), child: Text('close')),
+      ],
+    );
+  }
+}
+
 GoRouter _router({String initialLocation = Routes.album}) => GoRouter(
   initialLocation: initialLocation,
   routes: [
@@ -102,6 +124,13 @@ GoRouter _router({String initialLocation = Routes.album}) => GoRouter(
     GoRoute(
       path: Routes.album,
       builder: (_, _) => AlbumScreen(viewModel: _viewModel),
+    ),
+    GoRoute(
+      path: Routes.stickerPath,
+      builder: (_, state) {
+        _receivedArgs = state.extra as DetailArgs;
+        return Scaffold(body: _DetailProbe(args: _receivedArgs!));
+      },
     ),
   ],
 );
@@ -528,6 +557,139 @@ void main() {
 
       expect(find.byType(AlbumScreen), findsNothing);
       expect(find.text('home page'), findsOneWidget);
+    });
+  });
+
+  group('AlbumScreen sticker detail', () {
+    Album album() => Album(
+      teams: [
+        TeamAlbumGroup(
+          team: _brazil,
+          stickers: const [
+            AlbumPosition(
+              code: 'BRA-1',
+              number: 1,
+              status: StickerStatus.repeated,
+              repeated: 2,
+            ),
+            AlbumPosition(
+              code: 'BRA-2',
+              number: 2,
+              status: StickerStatus.missing,
+              repeated: 0,
+            ),
+          ],
+        ),
+      ],
+      loose: const [
+        AlbumPosition(
+          code: 'FWC-1',
+          number: 1,
+          status: StickerStatus.owned,
+          repeated: 0,
+        ),
+      ],
+    );
+
+    setUp(() {
+      _receivedArgs = null;
+      _albums.album = Result.ok(album());
+    });
+
+    testWidgets('opens the detail of the tapped sticker', (tester) async {
+      await _openAlbum(tester);
+
+      await tester.tap(find.byType(StickerTile).first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlbumScreen), findsNothing);
+      expect(find.text('detail BRA-1'), findsOneWidget);
+    });
+
+    testWidgets('sends the data of the sticker to the detail', (tester) async {
+      await _openAlbum(tester);
+
+      await tester.tap(find.byType(StickerTile).first);
+      await tester.pumpAndSettle();
+
+      expect(_receivedArgs, (
+        code: 'BRA-1',
+        number: 1,
+        team: 'Brazil',
+        country: 'BRA',
+        teamColor: Color(0xFFFFDF00),
+        rare: false,
+        count: 3,
+      ));
+    });
+
+    testWidgets('sends a count of zero for a missing sticker', (tester) async {
+      await _openAlbum(tester);
+
+      await tester.tap(find.byType(StickerTile).at(1));
+      await tester.pumpAndSettle();
+
+      expect(_receivedArgs?.code, 'BRA-2');
+      expect(_receivedArgs?.count, 0);
+    });
+
+    testWidgets('names the special section as the team of its stickers', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+
+      await tester.tap(find.byType(StickerTile).last);
+      await tester.pumpAndSettle();
+
+      expect(_receivedArgs?.team, 'ESPECIAIS');
+      expect(_receivedArgs?.teamColor, AppColors.ink);
+    });
+
+    testWidgets('reloads the album when the detail reports a change', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+      final loadsBefore = _albums.albumCalls.length;
+
+      await tester.tap(find.byType(StickerTile).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(_albums.albumCalls.length, loadsBefore + 1);
+      expect(_albums.summaryCalls, 2);
+      expect(_teams.calls, 2);
+    });
+
+    testWidgets('does not reload when the detail reports no change', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+      final loadsBefore = _albums.albumCalls.length;
+
+      await tester.tap(find.byType(StickerTile).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('discard'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(_albums.albumCalls.length, loadsBefore);
+    });
+
+    testWidgets('does not reload when the detail closes without a result', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+      final loadsBefore = _albums.albumCalls.length;
+
+      await tester.tap(find.byType(StickerTile).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(_albums.albumCalls.length, loadsBefore);
     });
   });
 }

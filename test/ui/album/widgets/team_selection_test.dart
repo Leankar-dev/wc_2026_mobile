@@ -174,4 +174,75 @@ void main() {
       expect(find.text('Brazil'), findsOneWidget);
     });
   });
+
+  group('TeamSelection tap', () {
+    Widget hostWithTap({
+      required List<AlbumStickerView> stickers,
+      required ValueChanged<AlbumStickerView> onStickerTap,
+    }) => MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(0.8),
+        ),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: CustomScrollView(
+          slivers: [
+            TeamSelection(
+              name: 'Brazil',
+              flagPath: '/flags/bra.png',
+              color: _color,
+              progress: '3/20',
+              stickers: stickers,
+              onStickerTap: onStickerTap,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    testWidgets('reports the sticker of the tapped tile', (tester) async {
+      _useNarrowScreen(tester);
+      final stickers = [for (var i = 1; i <= 4; i++) _sticker(i)];
+      final tapped = <AlbumStickerView>[];
+
+      await tester.pumpWidget(
+        hostWithTap(stickers: stickers, onStickerTap: tapped.add),
+      );
+      await tester.tap(find.byType(StickerTile).at(2));
+      await tester.tap(find.byType(StickerTile).at(0));
+
+      expect(tapped, [stickers[2], stickers[0]]);
+    });
+
+    testWidgets('reports missing stickers too', (tester) async {
+      _useNarrowScreen(tester);
+      final stickers = [_sticker(1, collected: false)];
+      final tapped = <AlbumStickerView>[];
+
+      await tester.pumpWidget(
+        hostWithTap(stickers: stickers, onStickerTap: tapped.add),
+      );
+      await tester.tap(find.byType(StickerTile));
+
+      expect(tapped.single.collected, isFalse);
+      expect(tapped.single.number, 1);
+    });
+
+    testWidgets('makes every tile tappable', (tester) async {
+      _useNarrowScreen(tester);
+
+      await tester.pumpWidget(
+        hostWithTap(
+          stickers: [for (var i = 1; i <= 5; i++) _sticker(i)],
+          onStickerTap: (_) {},
+        ),
+      );
+
+      final tiles = tester.widgetList<StickerTile>(find.byType(StickerTile));
+
+      expect(tiles.every((tile) => tile.onTap != null), isTrue);
+    });
+  });
 }

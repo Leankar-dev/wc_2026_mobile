@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' as flutter show InkWell;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/sticker_tile.dart';
@@ -138,6 +139,83 @@ void main() {
 
       expect(_tagDecoration(tester, 'BRA').color, soft);
       expect(_tagDecoration(tester, '01').color, soft);
+    });
+  });
+
+  group('StickerTile tap', () {
+    Widget hostWithTap({VoidCallback? onTap}) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 80,
+            height: 104,
+            child: StickerTile(
+              number: 1,
+              label: 'BRA',
+              player: 'JOGADOR',
+              teamColor: _teamColor,
+              collected: true,
+              onTap: onTap,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('calls onTap when the tile is tapped', (tester) async {
+      var taps = 0;
+
+      await tester.pumpWidget(hostWithTap(onTap: () => taps++));
+      await tester.tap(find.byType(StickerTile));
+
+      expect(taps, 1);
+    });
+
+    testWidgets('calls onTap on every tap', (tester) async {
+      var taps = 0;
+
+      await tester.pumpWidget(hostWithTap(onTap: () => taps++));
+      await tester.tap(find.byType(StickerTile));
+      await tester.tap(find.byType(StickerTile));
+
+      expect(taps, 2);
+    });
+
+    testWidgets('adds the ripple layer only when there is an onTap', (
+      tester,
+    ) async {
+      Finder inkWell() => find.descendant(
+        of: find.byType(StickerTile),
+        matching: find.byType(flutter.InkWell),
+      );
+
+      await tester.pumpWidget(hostWithTap());
+      expect(inkWell(), findsNothing);
+
+      await tester.pumpWidget(hostWithTap(onTap: () {}));
+      expect(inkWell(), findsOneWidget);
+    });
+
+    testWidgets('covers the whole tile with the tap area', (tester) async {
+      await tester.pumpWidget(hostWithTap(onTap: () {}));
+
+      final tile = tester.getSize(find.byType(StickerTile));
+      final area = tester.getSize(
+        find.descendant(
+          of: find.byType(StickerTile),
+          matching: find.byType(flutter.InkWell),
+        ),
+      );
+
+      expect(area, tile);
+    });
+
+    testWidgets('does nothing when there is no onTap', (tester) async {
+      await tester.pumpWidget(hostWithTap());
+      await tester.tap(find.byType(StickerTile));
+      await tester.pump();
+
+      expect(find.byType(StickerTile), findsOneWidget);
     });
   });
 }
