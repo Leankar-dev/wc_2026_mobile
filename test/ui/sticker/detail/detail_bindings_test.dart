@@ -29,27 +29,6 @@ void main() {
     });
   });
 
-  group('DetailScreen', () {
-    testWidgets('shows a placeholder for now', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(home: DetailScreen(sticker: _args)),
-      );
-
-      expect(find.byType(Placeholder), findsOneWidget);
-    });
-
-    testWidgets('keeps the sticker it was opened with', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(home: DetailScreen(sticker: _args)),
-      );
-
-      expect(
-        tester.widget<DetailScreen>(find.byType(DetailScreen)).sticker,
-        _args,
-      );
-    });
-  });
-
   group('DetailBindings', () {
     testWidgets('builds the screen with the view model available', (
       tester,

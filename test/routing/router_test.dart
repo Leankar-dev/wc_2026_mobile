@@ -11,6 +11,8 @@ import 'package:wc_2026_mobile/domain/use_cases/auth/auth_restore_session_use_ca
 import 'package:wc_2026_mobile/routing/router.dart';
 import 'package:wc_2026_mobile/routing/routes.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/widgets/backdrop.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/widgets/top_bar.dart';
 
 class _FakeAuthSessionRepository implements AuthSessionRepository {
   @override
@@ -92,7 +94,8 @@ void main() {
       final screen = tester.widget<DetailScreen>(find.byType(DetailScreen));
 
       expect(screen.sticker, _args);
-      expect(find.byType(Placeholder), findsOneWidget);
+      expect(find.byType(Backdrop), findsOneWidget);
+      expect(find.byType(TopBar), findsOneWidget);
 
       notifier.dispose();
     });
