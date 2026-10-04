@@ -7,7 +7,11 @@ import 'package:wc_2026_mobile/ui/album/widgets/hero_card.dart';
 import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/widgets/backdrop.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/widgets/delete_action.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/widgets/quantity_counter.dart';
+import 'package:wc_2026_mobile/ui/sticker/detail/widgets/status_banner.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/widgets/top_bar.dart';
+import 'package:wc_2026_mobile/ui/sticker/widgets/sticker_action_button.dart';
 
 const DetailArgs _args = (
   code: 'BRA-1',
@@ -339,6 +343,174 @@ void main() {
 
       expect(find.byType(DetailScreen), findsOneWidget);
       expect(find.text('album page'), findsNothing);
+    });
+  });
+
+  group('DetailScreen actions', () {
+    void useVeryTallScreen(WidgetTester tester) {
+      tester.view.physicalSize = Size(390, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets('shows the status banner with the count and the color', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final banner = tester.widget<StatusBanner>(find.byType(StatusBanner));
+
+      expect(banner.count, 2);
+      expect(banner.teamColor, Color(0xFFFFDF00));
+      expect(find.text('VOCÊ TEM ESTA FIGURINHA'), findsOneWidget);
+    });
+
+    testWidgets('shows the missing banner when the count is zero', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withCount(0)));
+
+      expect(find.text('VOCÊ NÃO TEM ESSA FIGURINHA'), findsOneWidget);
+    });
+
+    testWidgets('shows the quantity counter with the count', (tester) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withCount(5)));
+
+      expect(
+        tester.widget<QuantityCounter>(find.byType(QuantityCounter)).count,
+        5,
+      );
+      expect(find.text('×5'), findsOneWidget);
+    });
+
+    testWidgets('shows the save and the delete actions', (tester) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final save = tester.widget<StickerActionButton>(
+        find.byType(StickerActionButton),
+      );
+
+      expect(save.label, 'Salvar');
+      expect(save.icon, Icons.check_rounded);
+      expect(find.byType(DeleteAction), findsOneWidget);
+    });
+
+    testWidgets('stacks the blocks from the card to the counter', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final tops = [
+        for (final type in [
+          find.byType(HeroCard),
+          find.byType(StatusBanner),
+          find.byType(StickerActionButton),
+          find.byType(DeleteAction),
+          find.byType(QuantityCounter),
+        ])
+          tester.getTopLeft(type).dy,
+      ];
+
+      expect(tops, [...tops]..sort());
+      expect(tops.toSet(), hasLength(5));
+    });
+
+    testWidgets('puts the delete action before the counter for now', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(
+        tester.getTopLeft(find.byType(DeleteAction)).dy,
+        lessThan(tester.getTopLeft(find.byType(QuantityCounter)).dy),
+      );
+    });
+
+    testWidgets('stretches the delete action to the content width', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(tester.getSize(find.byType(DeleteAction)).width, 350);
+    });
+
+    testWidgets('does nothing when save is tapped for now', (tester) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+      await tester.tap(find.text('Salvar'));
+      await tester.pump();
+
+      expect(find.byType(DetailScreen), findsOneWidget);
+    });
+
+    testWidgets('does nothing when delete is tapped for now', (tester) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+      await tester.tap(find.text('EXCLUIR FIGURINHA'));
+      await tester.pump();
+
+      expect(find.byType(DetailScreen), findsOneWidget);
+    });
+
+    testWidgets('keeps the count when the plus button is tapped', (
+      tester,
+    ) async {
+      useVeryTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+
+      expect(
+        tester.widget<QuantityCounter>(find.byType(QuantityCounter)).count,
+        2,
+      );
+    });
+
+    testWidgets('scrolls to reach the counter on a short screen', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(390, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_host());
+
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+
+      await tester.scrollUntilVisible(
+        find.byType(QuantityCounter),
+        100,
+        scrollable: find.descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(find.byType(QuantityCounter), findsOneWidget);
     });
   });
 }
