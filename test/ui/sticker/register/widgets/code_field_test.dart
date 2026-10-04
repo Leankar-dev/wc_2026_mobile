@@ -143,12 +143,89 @@ void main() {
       expect(text.style?.color, AppColors.ink.withValues(alpha: .16));
     });
 
-    testWidgets('ignores the code it receives for now', (tester) async {
-      await tester.pumpWidget(_host(code: 'ABC123'));
+    testWidgets('shows the typed characters in the first boxes', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host(code: 'XY'));
 
-      expect(find.text('A'), findsNWidgets(6));
-      expect(find.text('B'), findsNothing);
-      expect(find.text('1'), findsNothing);
+      expect(find.text('X'), findsOneWidget);
+      expect(find.text('Y'), findsOneWidget);
+      expect(find.text('A'), findsNWidgets(4));
+    });
+
+    testWidgets('shows a complete code without placeholders', (tester) async {
+      await tester.pumpWidget(_host(code: 'XYZ123', length: 6, letters: 3));
+
+      for (final char in 'XYZ123'.split('')) {
+        expect(find.text(char), findsOneWidget, reason: char);
+      }
+      expect(find.text('A'), findsNothing);
+    });
+
+    testWidgets('fills the boxes in order', (tester) async {
+      await tester.pumpWidget(_host(code: 'XYZ12', length: 5, letters: 3));
+
+      final chars = [
+        for (var i = 0; i < 5; i++)
+          tester
+              .widget<Text>(
+                find.descendant(of: _boxes.at(i), matching: find.byType(Text)),
+              )
+              .data,
+      ];
+
+      expect(chars, ['X', 'Y', 'Z', '1', '2']);
+    });
+
+    testWidgets('ignores the characters beyond the length', (tester) async {
+      await tester.pumpWidget(_host(code: 'XYZ12345', length: 5, letters: 3));
+
+      expect(find.text('3'), findsNothing);
+      expect(find.text('2'), findsOneWidget);
+      expect(_boxes, findsNWidgets(5));
+    });
+
+    testWidgets('draws the typed characters solid and the rest faded', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host(code: 'X'));
+
+      expect(
+        tester.widget<Text>(find.text('X')).style?.color,
+        AppColors.ink,
+      );
+      expect(
+        tester.widget<Text>(find.text('A').first).style?.color,
+        AppColors.ink.withValues(alpha: .16),
+      );
+    });
+
+    testWidgets('keeps every box with the active border for now', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host(code: 'XYZ'));
+
+      for (var i = 0; i < 6; i++) {
+        final border = _decoration(tester, i).border! as Border;
+
+        expect(border.top.color, AppColors.green);
+        expect(border.top.width, 2);
+      }
+    });
+
+    testWidgets('paints a typed box white and an empty one tinted', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host(code: 'X'));
+
+      expect(_decoration(tester, 0).color, AppColors.white);
+      expect(
+        _decoration(tester, 1).color,
+        Color.alphaBlend(
+          AppColors.green.withValues(alpha: .06),
+          AppColors.white,
+        ),
+      );
     });
 
     testWidgets('uses the letter placeholder even for the digit boxes', (

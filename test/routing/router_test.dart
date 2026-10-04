@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import 'package:wc_2026_mobile/core/auth/auth_session_notifier.dart';
 import 'package:wc_2026_mobile/core/result.dart';
 import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
+import 'package:wc_2026_mobile/data/repositories/team/team_repository.dart';
 import 'package:wc_2026_mobile/data/repositories/auth_session/auth_session_repository.dart';
 import 'package:wc_2026_mobile/domain/models/album/album.dart';
 import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
 import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
 import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
 import 'package:wc_2026_mobile/domain/models/auth_session.dart';
+import 'package:wc_2026_mobile/domain/models/team/team.dart';
 import 'package:wc_2026_mobile/domain/use_cases/auth/auth_logout_use_case.dart';
 import 'package:wc_2026_mobile/domain/use_cases/auth/auth_restore_session_use_case.dart';
 import 'package:wc_2026_mobile/routing/router.dart';
@@ -68,6 +70,11 @@ class _FakeAlbumRepository implements AlbumRepository {
       Result.ok(const []);
 }
 
+class _FakeTeamRepository implements TeamRepository {
+  @override
+  Future<Result<List<Team>>> getTeams() async => Result.ok(const []);
+}
+
 const DetailArgs _args = (
   code: 'BRA-1',
   number: 1,
@@ -114,6 +121,7 @@ Future<GoRouter> _openApp(
       providers: [
         ChangeNotifierProvider<AuthSessionNotifier>.value(value: notifier),
         Provider<AlbumRepository>.value(value: _FakeAlbumRepository()),
+        Provider<TeamRepository>.value(value: _FakeTeamRepository()),
       ],
       child: app,
     ),
@@ -220,7 +228,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(CodeField), findsOneWidget);
-      expect(find.byType(Keypad), findsNWidgets(2));
+      expect(find.byType(Keypad), findsOneWidget);
 
       notifier.dispose();
     });

@@ -67,7 +67,7 @@ void main() {
     testWidgets('explains the format of the code', (tester) async {
       await tester.pumpWidget(_host(null));
 
-      expect(find.text('DIGITE 3 LETRAS DO TIME + 3 NÚMEROS'), findsOneWidget);
+      expect(find.text('DIGITE 3 LETRAS DO TIME + 2 NÚMEROS'), findsOneWidget);
     });
 
     testWidgets('does not show the found state', (tester) async {
@@ -89,7 +89,7 @@ void main() {
 
       expect(
         tester
-            .widget<Text>(find.text('DIGITE 3 LETRAS DO TIME + 3 NÚMEROS'))
+            .widget<Text>(find.text('DIGITE 3 LETRAS DO TIME + 2 NÚMEROS'))
             .style
             ?.color,
         AppColors.grayText,

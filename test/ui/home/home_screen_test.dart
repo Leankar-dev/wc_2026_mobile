@@ -113,7 +113,19 @@ GoRouter _router() => GoRouter(
     ),
     GoRoute(
       path: Routes.stickerRegister,
-      builder: (_, _) => Text('register page'),
+      builder: (context, _) => Column(
+        children: [
+          Text('register page'),
+          TextButton(
+            onPressed: () => context.pop(true),
+            child: Text('changed'),
+          ),
+          TextButton(
+            onPressed: () => context.pop(false),
+            child: Text('unchanged'),
+          ),
+        ],
+      ),
     ),
   ],
 );
@@ -286,6 +298,70 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('reloads the data when the register screen reports a change', (
+      tester,
+    ) async {
+      await _openHome(tester);
+
+      _repository.summary = Result.ok(
+        const AlbumSummary(total: 980, missing: 100, repeated: 5),
+      );
+      await tester.tap(find.text('ADICIONAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('changed'));
+      await tester.pumpAndSettle();
+
+      expect(_repository.summaryCalls, 2);
+      expect(_repository.recentCalls, 2);
+      expect(find.text('880 / 980 FIGURINHAS'), findsOneWidget);
+    });
+
+    testWidgets('does not reload when the register screen reports no change', (
+      tester,
+    ) async {
+      await _openHome(tester);
+
+      await tester.tap(find.text('ADICIONAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('unchanged'));
+      await tester.pumpAndSettle();
+
+      expect(_repository.summaryCalls, 1);
+      expect(_repository.recentCalls, 1);
+    });
+
+    testWidgets(
+      'does not reload when the register screen closes without a result',
+      (
+        tester,
+      ) async {
+        final appRouter = await _openHome(tester);
+
+        await tester.tap(find.text('ADICIONAR'));
+        await tester.pumpAndSettle();
+        appRouter.pop();
+        await tester.pumpAndSettle();
+
+        expect(_repository.summaryCalls, 1);
+        expect(_repository.recentCalls, 1);
+      },
+    );
+
+    testWidgets('can open the register screen more than once', (tester) async {
+      await _openHome(tester);
+
+      await tester.tap(find.text('ADICIONAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('changed'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ADICIONAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('changed'));
+      await tester.pumpAndSettle();
+
+      expect(_repository.summaryCalls, 3);
     });
 
     testWidgets('does nothing when trading for now', (tester) async {

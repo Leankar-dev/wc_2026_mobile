@@ -41,7 +41,7 @@ class const HintBanner({super.key, required final StickerMatch? _match})
                   Text(' ${match.team.toUpperCase()}', style: style),
                 ],
               )
-            : Text('DIGITE 3 LETRAS DO TIME + 3 NÚMEROS', style: style),
+            : Text('DIGITE 3 LETRAS DO TIME + 2 NÚMEROS', style: style),
       ),
     );
   }
