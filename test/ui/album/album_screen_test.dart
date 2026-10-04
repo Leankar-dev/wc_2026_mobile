@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/ui/album/album_screen.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/filter_tabs.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/header.dart';
+import 'package:wc_2026_mobile/ui/album/widgets/sticker_tile.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_strip.dart';
 
 Widget _host() => MaterialApp(
@@ -31,6 +32,20 @@ void main() {
       expect(strip.selected, 'BRA');
       expect(strip.teams, hasLength(39));
       expect(strip.teams.map((team) => team.code), contains('BRA'));
+    });
+
+    testWidgets('shows a collected and a missing sticker as examples', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host());
+
+      final tiles = tester
+          .widgetList<StickerTile>(find.byType(StickerTile))
+          .toList();
+
+      expect(tiles.map((tile) => tile.number), [1, 2]);
+      expect(tiles.map((tile) => tile.collected), [true, false]);
+      expect(find.text('— FALTANDO —'), findsOneWidget);
     });
 
     testWidgets('keeps the team codes unique', (tester) async {
