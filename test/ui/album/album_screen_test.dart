@@ -1,19 +1,77 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:wc_2026_mobile/core/exceptions/app_exception.dart';
+import 'package:wc_2026_mobile/core/result.dart';
+import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
+import 'package:wc_2026_mobile/data/repositories/team/team_repository.dart';
+import 'package:wc_2026_mobile/domain/models/album/album.dart';
+import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
+import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
+import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
+import 'package:wc_2026_mobile/domain/models/team/team.dart';
+import 'package:wc_2026_mobile/routing/routes.dart';
 import 'package:wc_2026_mobile/ui/album/album_screen.dart';
+import 'package:wc_2026_mobile/ui/album/album_view_model.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/filter_tabs.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/header.dart';
-import 'package:wc_2026_mobile/ui/album/widgets/sticker_tile.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_selection.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/team_strip.dart';
 
-Widget _host() => MaterialApp(
-  builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(0.8)),
-    child: child!,
-  ),
-  home: AlbumScreen(),
+class _FakeAlbumRepository implements AlbumRepository {
+  Result<AlbumSummary> summary = Result.ok(
+    const AlbumSummary(total: 980, missing: 300, repeated: 12),
+  );
+  final albumCalls = <({StickerStatus? status, String? team})>[];
+  var summaryCalls = 0;
+
+  @override
+  Future<Result<Album>> getAlbum({StickerStatus? status, String? team}) async {
+    albumCalls.add((status: status, team: team));
+    return Result.ok(const Album(teams: [], loose: []));
+  }
+
+  @override
+  Future<Result<AlbumSummary>> getSummary() async {
+    summaryCalls++;
+    return summary;
+  }
+
+  @override
+  Future<Result<List<RecentSticker>>> getRecentStickers() async =>
+      Result.ok(const []);
+}
+
+class _FakeTeamRepository implements TeamRepository {
+  Result<List<Team>> teams = Result.ok(const [_brazil, _argentina]);
+  var calls = 0;
+
+  @override
+  Future<Result<List<Team>>> getTeams() async {
+    calls++;
+    return teams;
+  }
+}
+
+const _brazil = Team(
+  code: 'BRA',
+  name: 'Brazil',
+  flagUrl: '/flags/bra.png',
+  primaryColor: 0xFFFFDF00,
 );
+
+const _argentina = Team(
+  code: 'ARG',
+  name: 'Argentina',
+  flagUrl: '/flags/arg.png',
+  primaryColor: 0xFF6CACE4,
+);
+
+late _FakeAlbumRepository _albums;
+late _FakeTeamRepository _teams;
+late AlbumViewModel _viewModel;
 
 void _useTallScreen(WidgetTester tester) {
   tester.view.physicalSize = Size(390, 2400);
@@ -21,171 +79,240 @@ void _useTallScreen(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+Widget _app(GoRouter router) => MaterialApp.router(
+  routerConfig: router,
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(0.8)),
+    child: child!,
+  ),
+);
+
+GoRouter _router({String initialLocation = Routes.album}) => GoRouter(
+  initialLocation: initialLocation,
+  routes: [
+    GoRoute(path: Routes.home, builder: (_, _) => Text('home page')),
+    GoRoute(
+      path: Routes.album,
+      builder: (_, _) => AlbumScreen(viewModel: _viewModel),
+    ),
+  ],
+);
+
+Future<void> _openAlbum(WidgetTester tester, {bool init = true}) async {
+  _useTallScreen(tester);
+  await tester.pumpWidget(_app(_router()));
+  if (init) {
+    _viewModel.init();
+    await tester.pump();
+    await tester.pump();
+  }
+}
+
+Finder _inTabs(String text) =>
+    find.descendant(of: find.byType(FilterTabs), matching: find.text(text));
+
+Finder get _discs => find.descendant(
+  of: find.byType(TeamStrip),
+  matching: find.byType(InkWell),
+);
+
 void main() {
+  setUp(() {
+    _albums = _FakeAlbumRepository();
+    _teams = _FakeTeamRepository();
+    _viewModel = AlbumViewModel(
+      albumRepository: _albums,
+      teamRepository: _teams,
+    );
+  });
+
+  tearDown(() => _viewModel.dispose());
+
   group('AlbumScreen', () {
     testWidgets('shows the header and the search field', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
+      await _openAlbum(tester);
 
       expect(find.byType(Header), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('Buscar figurinha, país ou nº…'), findsOneWidget);
-      expect(find.byIcon(Icons.search), findsOneWidget);
     });
 
     testWidgets('accepts typing in the search field', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
+      await _openAlbum(tester);
       await tester.enterText(find.byType(TextField), 'bra');
       await tester.pump();
 
       expect(find.text('bra'), findsOneWidget);
     });
 
-    testWidgets('shows the filter tabs with their counts', (tester) async {
-      _useTallScreen(tester);
+    testWidgets('hides the filters until their data arrives', (tester) async {
+      await _openAlbum(tester, init: false);
 
-      await tester.pumpWidget(_host());
-
-      Finder inTabs(String text) => find.descendant(
-        of: find.byType(FilterTabs),
-        matching: find.text(text),
-      );
-
-      expect(find.byType(FilterTabs), findsOneWidget);
-      expect(inTabs('TODAS'), findsOneWidget);
-      expect(inTabs('10'), findsOneWidget);
-      expect(inTabs('20'), findsOneWidget);
-      expect(inTabs('30'), findsOneWidget);
+      expect(find.byType(FilterTabs), findsNothing);
+      expect(find.byType(TeamStrip), findsNothing);
     });
 
-    testWidgets('shows the team strip with Brazil selected', (tester) async {
-      _useTallScreen(tester);
+    testWidgets('shows the tabs with the counts of the summary', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
 
-      await tester.pumpWidget(_host());
+      expect(find.byType(FilterTabs), findsOneWidget);
+      expect(_inTabs('980'), findsOneWidget);
+      expect(_inTabs('300'), findsOneWidget);
+      expect(_inTabs('12'), findsOneWidget);
+    });
+
+    testWidgets('shows the team strip with the loaded teams', (tester) async {
+      await _openAlbum(tester);
 
       final strip = tester.widget<TeamStrip>(find.byType(TeamStrip));
 
-      expect(strip.selected, 'BRA');
-      expect(strip.teams, hasLength(39));
-      expect(strip.teams.map((team) => team.code), contains('BRA'));
+      expect(strip.teams, [_brazil, _argentina]);
+      expect(strip.selected, isNull);
+      expect(_discs, findsNWidgets(2));
     });
 
-    testWidgets('keeps the team codes unique', (tester) async {
-      _useTallScreen(tester);
+    testWidgets('hides the tabs when the summary fails', (tester) async {
+      _albums.summary = Result.error(const NetworkException());
 
-      await tester.pumpWidget(_host());
+      await _openAlbum(tester);
 
-      final codes = tester
-          .widget<TeamStrip>(find.byType(TeamStrip))
-          .teams
-          .map((team) => team.code);
-
-      expect(codes.toSet(), hasLength(codes.length));
+      expect(find.byType(FilterTabs), findsNothing);
+      expect(find.byType(TeamStrip), findsOneWidget);
     });
 
-    testWidgets('shows the two team blocks with their progress', (
+    testWidgets('hides the strip when there are no teams', (tester) async {
+      _teams.teams = Result.ok(const []);
+
+      await _openAlbum(tester);
+
+      expect(find.byType(TeamStrip), findsNothing);
+      expect(find.byType(FilterTabs), findsOneWidget);
+    });
+
+    testWidgets('keeps the example blocks of teams', (tester) async {
+      await _openAlbum(tester);
+
+      expect(find.byType(TeamSelection), findsNWidgets(2));
+    });
+  });
+
+  group('AlbumScreen filters', () {
+    testWidgets('selects the tab that was tapped and reloads the album', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+      _albums.albumCalls.clear();
+
+      await tester.tap(find.text('FALTANDO'));
+      await tester.pump();
+
+      expect(_viewModel.status, StickerStatus.missing);
+      expect(
+        tester.widget<FilterTabs>(find.byType(FilterTabs)).selected,
+        StickerStatus.missing,
+      );
+      expect(_albums.albumCalls, [(status: StickerStatus.missing, team: null)]);
+    });
+
+    testWidgets('clears the status when the all tab is tapped', (tester) async {
+      await _openAlbum(tester);
+      await tester.tap(find.text('REPETIDAS'));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('TODAS'));
+      await tester.pump();
+
+      expect(_viewModel.status, isNull);
+      expect(tester.widget<FilterTabs>(find.byType(FilterTabs)).selected, null);
+    });
+
+    testWidgets('selects the team that was tapped and reloads the album', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+      _albums.albumCalls.clear();
+
+      await tester.tap(_discs.at(1));
+      await tester.pump();
+
+      expect(_viewModel.teamCode, 'ARG');
+      expect(tester.widget<TeamStrip>(find.byType(TeamStrip)).selected, 'ARG');
+      expect(_albums.albumCalls, [(status: null, team: 'ARG')]);
+    });
+
+    testWidgets('enlarges the selected team disc', (tester) async {
+      await _openAlbum(tester);
+
+      await tester.tap(_discs.at(0));
+      await tester.pump();
+
+      expect(tester.getSize(_discs.at(0)).width, 52);
+      expect(tester.getSize(_discs.at(1)).width, 44);
+    });
+
+    testWidgets('keeps the tab counts when a filter is applied', (
+      tester,
+    ) async {
+      await _openAlbum(tester);
+
+      await tester.tap(find.text('FALTANDO'));
+      await tester.pump();
+
+      expect(_inTabs('980'), findsOneWidget);
+      expect(_inTabs('300'), findsOneWidget);
+    });
+  });
+
+  group('AlbumScreen refresh and navigation', () {
+    testWidgets('reloads the three sources when pulled down', (tester) async {
+      await _openAlbum(tester);
+
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pump();
+      await tester.pump(Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(_albums.albumCalls, hasLength(2));
+      expect(_albums.summaryCalls, 2);
+      expect(_teams.calls, 2);
+    });
+
+    testWidgets('goes back to the previous page when there is one', (
       tester,
     ) async {
       _useTallScreen(tester);
+      final router = _router(initialLocation: Routes.home);
 
-      await tester.pumpWidget(_host());
+      await tester.pumpWidget(_app(router));
+      unawaited(router.push(Routes.album));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlbumScreen), findsOneWidget);
 
-      final blocks = tester
-          .widgetList<TeamSelection>(find.byType(TeamSelection))
-          .toList();
-
-      expect(blocks.map((block) => block.name), ['Brasil', 'BEL']);
-      expect(blocks.map((block) => block.progress), ['2/21', '5/21']);
-      expect(find.text('Brasil'), findsOneWidget);
-      expect(find.text('2/21'), findsOneWidget);
-      expect(find.text('5/21'), findsOneWidget);
-    });
-
-    testWidgets('shows six stickers per block, two collected', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
-
-      final tiles = tester
-          .widgetList<StickerTile>(find.byType(StickerTile))
-          .toList();
-
-      expect(tiles, hasLength(12));
-      expect(tiles.where((tile) => tile.collected), hasLength(4));
-      expect(find.text('— FALTANDO —'), findsNWidgets(8));
-    });
-
-    testWidgets('reaches the second block by scrolling', (tester) async {
-      await tester.pumpWidget(_host());
-
-      await tester.scrollUntilVisible(
-        find.text('5/21'),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-
-      expect(find.text('5/21'), findsOneWidget);
-    });
-
-    testWidgets('refreshes without errors when pulled down', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
-      await tester.fling(
-        find.byType(CustomScrollView),
-        Offset(0, 300),
-        1000,
-      );
+      await tester.tap(find.byTooltip('Voltar'));
       await tester.pumpAndSettle();
 
+      expect(find.byType(AlbumScreen), findsNothing);
+      expect(find.text('home page'), findsOneWidget);
+    });
+
+    testWidgets('goes to the home when there is nothing to go back to', (
+      tester,
+    ) async {
+      await _openAlbum(tester, init: false);
       expect(find.byType(AlbumScreen), findsOneWidget);
-    });
 
-    testWidgets('ignores taps on a team disc', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
-      await tester.tap(
-        find
-            .descendant(
-              of: find.byType(TeamStrip),
-              matching: find.byType(InkWell),
-            )
-            .at(2),
-      );
-      await tester.pump();
-
-      expect(find.byType(AlbumScreen), findsOneWidget);
-    });
-
-    testWidgets('logs the tab that was tapped', (tester) async {
-      _useTallScreen(tester);
-
-      final original = debugPrint;
-      final logs = <String?>[];
-      debugPrint = (message, {wrapWidth}) => logs.add(message);
-
-      try {
-        await tester.pumpWidget(_host());
-        await tester.tap(find.text('FALTANDO'));
-      } finally {
-        debugPrint = original;
-      }
-
-      expect(logs, ['Alterando a tab StickerStatus.missing']);
-    });
-
-    testWidgets('ignores taps on the back button', (tester) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
       await tester.tap(find.byTooltip('Voltar'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(find.byType(AlbumScreen), findsNothing);
+      expect(find.text('home page'), findsOneWidget);
     });
   });
 }

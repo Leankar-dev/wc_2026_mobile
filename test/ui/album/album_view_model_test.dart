@@ -215,4 +215,171 @@ void main() {
       expect(albumRepository.albumCalls, hasLength(2));
     });
   });
+
+  group('AlbumViewModel filters', () {
+    setUp(() async {
+      viewModel.init();
+      await _settle();
+      albumRepository.albumCalls.clear();
+    });
+
+    test('selectedStatus stores the status and reloads the album', () async {
+      viewModel.selectedStatus(StickerStatus.missing);
+      await _settle();
+
+      expect(viewModel.status, StickerStatus.missing);
+      expect(viewModel.filtered, isTrue);
+      expect(albumRepository.albumCalls, [
+        (status: StickerStatus.missing, team: null),
+      ]);
+    });
+
+    test('selectedStatus with null clears the status', () async {
+      viewModel.selectedStatus(StickerStatus.repeated);
+      await _settle();
+      albumRepository.albumCalls.clear();
+
+      viewModel.selectedStatus(null);
+      await _settle();
+
+      expect(viewModel.status, isNull);
+      expect(viewModel.filtered, isFalse);
+      expect(albumRepository.albumCalls, [(status: null, team: null)]);
+    });
+
+    test(
+      'selectedStatus ignores the status that is already selected',
+      () async {
+        viewModel.selectedStatus(StickerStatus.missing);
+        await _settle();
+        albumRepository.albumCalls.clear();
+
+        viewModel.selectedStatus(StickerStatus.missing);
+        await _settle();
+
+        expect(albumRepository.albumCalls, isEmpty);
+      },
+    );
+
+    test('selectedStatus ignores null when nothing is selected', () async {
+      viewModel.selectedStatus(null);
+      await _settle();
+
+      expect(albumRepository.albumCalls, isEmpty);
+    });
+
+    test('toggleTeam stores the team and reloads the album', () async {
+      viewModel.toggleTeam('BRA');
+      await _settle();
+
+      expect(viewModel.teamCode, 'BRA');
+      expect(viewModel.filtered, isTrue);
+      expect(albumRepository.albumCalls, [(status: null, team: 'BRA')]);
+    });
+
+    test('toggleTeam ignores the team that is already selected', () async {
+      viewModel.toggleTeam('BRA');
+      await _settle();
+      albumRepository.albumCalls.clear();
+
+      viewModel.toggleTeam('BRA');
+      await _settle();
+
+      expect(viewModel.teamCode, 'BRA');
+      expect(albumRepository.albumCalls, isEmpty);
+    });
+
+    test('toggleTeam switches to another team', () async {
+      viewModel.toggleTeam('BRA');
+      await _settle();
+      viewModel.toggleTeam('ARG');
+      await _settle();
+
+      expect(viewModel.teamCode, 'ARG');
+      expect(albumRepository.albumCalls.last, (status: null, team: 'ARG'));
+    });
+
+    test('combines the status and the team in the same request', () async {
+      viewModel.selectedStatus(StickerStatus.repeated);
+      await _settle();
+      viewModel.toggleTeam('BRA');
+      await _settle();
+
+      expect(albumRepository.albumCalls.last, (
+        status: StickerStatus.repeated,
+        team: 'BRA',
+      ));
+    });
+
+    test('notifies listeners when a filter changes', () async {
+      var notifications = 0;
+      viewModel.addListener(() => notifications++);
+
+      viewModel.selectedStatus(StickerStatus.missing);
+      viewModel.toggleTeam('BRA');
+
+      expect(notifications, 2);
+    });
+
+    test('does not notify when the filter does not change', () async {
+      var notifications = 0;
+      viewModel.addListener(() => notifications++);
+
+      viewModel.selectedStatus(null);
+
+      expect(notifications, 0);
+    });
+
+    test('keeps the new filter but drops the reload during a load', () async {
+      albumRepository.gate = Completer<void>();
+      viewModel.loadAlbum.execute();
+      await _settle();
+      albumRepository.albumCalls.clear();
+
+      viewModel.selectedStatus(StickerStatus.missing);
+      await _settle();
+
+      expect(viewModel.status, StickerStatus.missing);
+      expect(albumRepository.albumCalls, isEmpty);
+
+      albumRepository.gate!.complete();
+      await _settle();
+    });
+  });
+
+  group('AlbumViewModel refresh', () {
+    test('reloads the album, the teams and the summary', () async {
+      viewModel.init();
+      await _settle();
+
+      await viewModel.refresh();
+
+      expect(albumRepository.albumCalls, hasLength(2));
+      expect(teamRepository.calls, 2);
+      expect(albumRepository.summaryCalls, 2);
+    });
+
+    test('keeps the active filters', () async {
+      viewModel.init();
+      await _settle();
+      viewModel.toggleTeam('BRA');
+      await _settle();
+
+      await viewModel.refresh();
+
+      expect(albumRepository.albumCalls.last, (status: null, team: 'BRA'));
+    });
+
+    test('refreshes the counts', () async {
+      viewModel.init();
+      await _settle();
+      albumRepository.summary = Result.ok(
+        const AlbumSummary(total: 980, missing: 100, repeated: 3),
+      );
+
+      await viewModel.refresh();
+
+      expect(viewModel.counts?.missing, 100);
+    });
+  });
 }
