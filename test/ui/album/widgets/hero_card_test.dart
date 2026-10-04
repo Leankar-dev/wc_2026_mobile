@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/hero_card.dart';
 import 'package:wc_2026_mobile/ui/core/share/team_disc.dart';
 import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
+import 'package:wc_2026_mobile/ui/sticker/widgets/sticker_desaturate.dart';
 
 const _teamColor = Color(0xFF009C3B);
 
@@ -221,6 +222,160 @@ void main() {
       );
 
       expect(tester.takeException(), isNotNull);
+    });
+  });
+
+  group('HeroCard art', () {
+    Finder inCard(Finder finder) =>
+        find.descendant(of: find.byType(HeroCard), matching: finder);
+
+    List<Color> boxColors(WidgetTester tester) => tester
+        .widgetList<ColoredBox>(inCard(find.byType(ColoredBox)))
+        .map((box) => box.color)
+        .toList();
+
+    Finder assetImages() => inCard(
+      find.byWidgetPredicate((w) => w is Image && w.image is AssetImage),
+    );
+
+    List<Image> images(WidgetTester tester) =>
+        tester.widgetList<Image>(assetImages()).toList();
+
+    testWidgets('fills the space below the header with the art', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final album = assetImages().first;
+
+      expect(tester.getSize(album), Size(280, 330));
+    });
+
+    testWidgets('paints the art with the team color when collected', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: true));
+
+      expect(boxColors(tester), [
+        _teamColor,
+        _teamColor,
+        _teamColor.withValues(alpha: .5),
+      ]);
+    });
+
+    testWidgets('paints the art gray when not collected', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: false));
+
+      expect(boxColors(tester), [
+        AppColors.grayDark,
+        AppColors.gray,
+        AppColors.gray.withValues(alpha: .7),
+      ]);
+    });
+
+    testWidgets('draws the album image and the logo', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(images(tester), hasLength(2));
+    });
+
+    testWidgets('draws the images stronger when collected', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: true));
+
+      expect(images(tester).map((i) => i.opacity!.value), [0.8, 0.95]);
+    });
+
+    testWidgets('draws the images faded when not collected', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: false));
+
+      expect(images(tester).map((i) => i.opacity!.value), [0.55, 0.35]);
+    });
+
+    testWidgets('stretches the album image and keeps the logo proportion', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(images(tester).map((i) => i.fit), [BoxFit.fill, BoxFit.contain]);
+    });
+
+    testWidgets('fades the bottom of the art with a gradient', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: true));
+
+      final gradient = tester
+          .widgetList<DecoratedBox>(inCard(find.byType(DecoratedBox)))
+          .map((box) => box.decoration)
+          .whereType<BoxDecoration>()
+          .map((decoration) => decoration.gradient)
+          .whereType<LinearGradient>()
+          .single;
+
+      expect(gradient.colors, [
+        _teamColor.withValues(alpha: 0),
+        _teamColor.withValues(alpha: .15),
+        AppColors.ink.withValues(alpha: .6),
+      ]);
+    });
+
+    testWidgets('keeps the flag in color when collected', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: true));
+
+      expect(
+        tester.widget<StickerDesaturate>(find.byType(StickerDesaturate)).active,
+        isFalse,
+      );
+    });
+
+    testWidgets('turns the flag gray when not collected', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: false));
+
+      expect(
+        tester.widget<StickerDesaturate>(find.byType(StickerDesaturate)).active,
+        isTrue,
+      );
+    });
+
+    testWidgets('puts only the flag disc under the desaturation', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(collected: false));
+
+      expect(
+        find.descendant(
+          of: find.byType(StickerDesaturate),
+          matching: find.byType(TeamDisc),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(StickerDesaturate),
+          matching: find.text('BRAZIL'),
+        ),
+        findsNothing,
+      );
     });
   });
 }

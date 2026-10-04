@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:wc_2026_mobile/routing/routes.dart';
 import 'package:wc_2026_mobile/ui/album/widgets/hero_card.dart';
 import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
@@ -142,18 +144,6 @@ void main() {
 
       expect(tester.getSize(find.byType(Backdrop)), Size(390, 844));
     });
-
-    testWidgets('does nothing when the back arrow is tapped for now', (
-      tester,
-    ) async {
-      _useTallScreen(tester);
-
-      await tester.pumpWidget(_host());
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pump();
-
-      expect(find.byType(DetailScreen), findsOneWidget);
-    });
   });
 
   group('DetailScreen card', () {
@@ -278,6 +268,77 @@ void main() {
       );
 
       expect(scrollable.position.maxScrollExtent, 0);
+    });
+  });
+
+  group('DetailScreen back', () {
+    GoRouter router({required String initialLocation}) => GoRouter(
+      initialLocation: initialLocation,
+      routes: [
+        GoRoute(path: Routes.album, builder: (_, _) => Text('album page')),
+        GoRoute(
+          path: Routes.stickerPath,
+          builder: (_, _) => DetailScreen(sticker: _args),
+        ),
+      ],
+    );
+
+    Widget app(GoRouter router) => MaterialApp.router(
+      routerConfig: router,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(0.8),
+        ),
+        child: child!,
+      ),
+    );
+
+    testWidgets('closes the detail and reports no change when it can pop', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      final appRouter = router(initialLocation: Routes.album);
+
+      await tester.pumpWidget(app(appRouter));
+      final result = appRouter.push<bool>(Routes.sticker('BRA-1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DetailScreen), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DetailScreen), findsNothing);
+      expect(find.text('album page'), findsOneWidget);
+      expect(await result, isFalse);
+    });
+
+    testWidgets('goes to the album when there is nothing to go back to', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      final appRouter = router(initialLocation: Routes.sticker('BRA-1'));
+
+      await tester.pumpWidget(app(appRouter));
+      expect(find.byType(DetailScreen), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DetailScreen), findsNothing);
+      expect(find.text('album page'), findsOneWidget);
+    });
+
+    testWidgets('keeps the screen open when the arrow is not tapped', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      final appRouter = router(initialLocation: Routes.sticker('BRA-1'));
+
+      await tester.pumpWidget(app(appRouter));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DetailScreen), findsOneWidget);
+      expect(find.text('album page'), findsNothing);
     });
   });
 }
