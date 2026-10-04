@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:wc_2026_mobile/ui/album/widgets/hero_card.dart';
 import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/widgets/backdrop.dart';
@@ -16,7 +17,30 @@ const DetailArgs _args = (
   count: 2,
 );
 
-Widget _host({EdgeInsets padding = EdgeInsets.zero}) => MaterialApp(
+DetailArgs _withCount(int count) => (
+  code: _args.code,
+  number: _args.number,
+  team: _args.team,
+  country: _args.country,
+  teamColor: _args.teamColor,
+  rare: _args.rare,
+  count: count,
+);
+
+DetailArgs _withRare() => (
+  code: _args.code,
+  number: _args.number,
+  team: _args.team,
+  country: _args.country,
+  teamColor: _args.teamColor,
+  rare: true,
+  count: _args.count,
+);
+
+Widget _host({
+  EdgeInsets padding = EdgeInsets.zero,
+  DetailArgs sticker = _args,
+}) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(
       padding: padding,
@@ -24,7 +48,7 @@ Widget _host({EdgeInsets padding = EdgeInsets.zero}) => MaterialApp(
     ),
     child: child!,
   ),
-  home: DetailScreen(sticker: _args),
+  home: DetailScreen(sticker: sticker),
 );
 
 void _useTallScreen(WidgetTester tester) {
@@ -129,6 +153,131 @@ void main() {
       await tester.pump();
 
       expect(find.byType(DetailScreen), findsOneWidget);
+    });
+  });
+
+  group('DetailScreen card', () {
+    testWidgets('shows the card with the data of the sticker', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final card = tester.widget<HeroCard>(find.byType(HeroCard));
+
+      expect(card.number, 1);
+      expect(card.team, 'Brazil');
+      expect(card.country, 'BRA');
+      expect(card.teamColor, Color(0xFFFFDF00));
+    });
+
+    testWidgets('shows the team name, the label and the number', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      expect(find.text('BRAZIL'), findsOneWidget);
+      expect(find.text('SELEÇÃO OFICIAL'), findsOneWidget);
+      expect(find.text('01'), findsOneWidget);
+    });
+
+    testWidgets('marks the card as collected when the count is positive', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _args));
+
+      expect(tester.widget<HeroCard>(find.byType(HeroCard)).collected, isTrue);
+    });
+
+    testWidgets('marks the card as not collected when the count is zero', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withCount(0)));
+
+      expect(tester.widget<HeroCard>(find.byType(HeroCard)).collected, isFalse);
+    });
+
+    testWidgets('marks the card as collected with a single copy', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withCount(1)));
+
+      expect(tester.widget<HeroCard>(find.byType(HeroCard)).collected, isTrue);
+    });
+
+    testWidgets('never marks the card as rare for now', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withRare()));
+
+      expect(tester.widget<HeroCard>(find.byType(HeroCard)).rare, isFalse);
+    });
+
+    testWidgets('keeps the backdrop colored even when not collected', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host(sticker: _withCount(0)));
+
+      expect(tester.widget<HeroCard>(find.byType(HeroCard)).collected, isFalse);
+      expect(tester.widget<Backdrop>(find.byType(Backdrop)).collected, isTrue);
+      expect(find.text('03 / 980'), findsOneWidget);
+    });
+
+    testWidgets('centers the card below the top bar', (tester) async {
+      _useTallScreen(tester);
+
+      await tester.pumpWidget(_host());
+
+      final card = tester.getRect(find.byType(HeroCard));
+      final bar = tester.getRect(find.byType(TopBar));
+
+      expect(card.top, greaterThan(bar.bottom));
+      expect(card.center.dx, closeTo(195, 0.5));
+    });
+
+    testWidgets('scrolls when the screen is shorter than the card', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(390, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_host());
+
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+    });
+
+    testWidgets('does not scroll when the card fits', (tester) async {
+      tester.view.physicalSize = Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_host());
+
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(scrollable.position.maxScrollExtent, 0);
     });
   });
 }
