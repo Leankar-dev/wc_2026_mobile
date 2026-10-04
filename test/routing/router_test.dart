@@ -4,7 +4,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:wc_2026_mobile/core/auth/auth_session_notifier.dart';
 import 'package:wc_2026_mobile/core/result.dart';
+import 'package:wc_2026_mobile/data/repositories/album/album_repository.dart';
 import 'package:wc_2026_mobile/data/repositories/auth_session/auth_session_repository.dart';
+import 'package:wc_2026_mobile/domain/models/album/album.dart';
+import 'package:wc_2026_mobile/domain/models/album/album_summary.dart';
+import 'package:wc_2026_mobile/domain/models/album/recent_sticker.dart';
+import 'package:wc_2026_mobile/domain/models/album/sticker_status.dart';
 import 'package:wc_2026_mobile/domain/models/auth_session.dart';
 import 'package:wc_2026_mobile/domain/use_cases/auth/auth_logout_use_case.dart';
 import 'package:wc_2026_mobile/domain/use_cases/auth/auth_restore_session_use_case.dart';
@@ -28,6 +33,35 @@ class _FakeAuthSessionRepository implements AuthSessionRepository {
 
   @override
   Future<Result<void>> save(AuthSession session) async => Result.done;
+}
+
+class _FakeAlbumRepository implements AlbumRepository {
+  @override
+  Future<Result<void>> registerSticker({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> updateStickerQuantity({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> removeSticker(String code) async => Result.done;
+
+  @override
+  Future<Result<Album>> getAlbum({StickerStatus? status, String? team}) async =>
+      Result.ok(const Album(teams: [], loose: []));
+
+  @override
+  Future<Result<AlbumSummary>> getSummary() async =>
+      Result.ok(const AlbumSummary(total: 0, missing: 0, repeated: 0));
+
+  @override
+  Future<Result<List<RecentSticker>>> getRecentStickers() async =>
+      Result.ok(const []);
 }
 
 const DetailArgs _args = (
@@ -62,8 +96,11 @@ Future<GoRouter> _openApp(
   final appRouter = router(notifier);
 
   await tester.pumpWidget(
-    ChangeNotifierProvider<AuthSessionNotifier>.value(
-      value: notifier,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthSessionNotifier>.value(value: notifier),
+        Provider<AlbumRepository>.value(value: _FakeAlbumRepository()),
+      ],
       child: MaterialApp.router(
         routerConfig: appRouter,
         builder: (context, child) => MediaQuery(
@@ -96,6 +133,47 @@ void main() {
       expect(screen.sticker, _args);
       expect(find.byType(Backdrop), findsOneWidget);
       expect(find.byType(TopBar), findsOneWidget);
+
+      notifier.dispose();
+    });
+
+    testWidgets('starts the detail of a missing sticker without a copy', (
+      tester,
+    ) async {
+      final notifier = _signedInNotifier();
+      final appRouter = await _openApp(tester, notifier);
+
+      appRouter.go(
+        Routes.sticker('BRA-1'),
+        extra: (
+          code: 'BRA-1',
+          number: 1,
+          team: 'Brazil',
+          country: 'BRA',
+          teamColor: Color(0xFFFFDF00),
+          rare: false,
+          count: 0,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('TENHO ESTA FIGURINHA'), findsOneWidget);
+      expect(find.text('EXCLUIR FIGURINHA'), findsNothing);
+
+      notifier.dispose();
+    });
+
+    testWidgets('starts the detail of a sticker in the album', (tester) async {
+      final notifier = _signedInNotifier();
+      final appRouter = await _openApp(tester, notifier);
+
+      appRouter.go(Routes.sticker('BRA-1'), extra: _args);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('SALVAR'), findsOneWidget);
+      expect(find.text('EXCLUIR FIGURINHA'), findsOneWidget);
 
       notifier.dispose();
     });

@@ -79,15 +79,77 @@ void main() {
       expect(_background(tester, 1), AppColors.yellow);
     });
 
-    testWidgets('never reports a change for now', (tester) async {
+    testWidgets('reports one more copy when the plus button is tapped', (
+      tester,
+    ) async {
       final changes = <int>[];
 
       await tester.pumpWidget(_host(count: 3, onChanged: changes.add));
       await tester.tap(find.byIcon(Icons.add));
+
+      expect(changes, [4]);
+    });
+
+    testWidgets('reports one less copy when the minus button is tapped', (
+      tester,
+    ) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 3, onChanged: changes.add));
       await tester.tap(find.byIcon(Icons.remove));
-      await tester.pump();
+
+      expect(changes, [2]);
+    });
+
+    testWidgets('reports every tap', (tester) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 3, onChanged: changes.add));
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.tap(find.byIcon(Icons.remove));
+
+      expect(changes, [4, 4, 2]);
+    });
+
+    testWidgets('does not go below one copy with the minus button', (
+      tester,
+    ) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 1, onChanged: changes.add));
+      await tester.tap(find.byIcon(Icons.remove));
 
       expect(changes, isEmpty);
+    });
+
+    testWidgets('ignores the minus button when there is no copy', (
+      tester,
+    ) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 0, onChanged: changes.add));
+      await tester.tap(find.byIcon(Icons.remove));
+
+      expect(changes, isEmpty);
+    });
+
+    testWidgets('adds the first copy with the plus button', (tester) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 0, onChanged: changes.add));
+      await tester.tap(find.byIcon(Icons.add));
+
+      expect(changes, [1]);
+    });
+
+    testWidgets('has no upper limit with the plus button', (tester) async {
+      final changes = <int>[];
+
+      await tester.pumpWidget(_host(count: 999, onChanged: changes.add));
+      await tester.tap(find.byIcon(Icons.add));
+
+      expect(changes, [1000]);
     });
 
     testWidgets('keeps the count when a button is tapped', (tester) async {

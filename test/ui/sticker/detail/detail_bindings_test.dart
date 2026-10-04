@@ -213,7 +213,10 @@ void main() {
       await tester.pumpWidget(
         _app(
           repository: repository,
-          screenBuilder: (context) => DetailScreen(sticker: _args),
+          screenBuilder: (context) => DetailScreen(
+            sticker: _args,
+            viewModel: context.read<DetailViewModel>(),
+          ),
         ),
       );
 
