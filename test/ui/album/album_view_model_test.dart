@@ -578,35 +578,143 @@ void main() {
       );
     });
 
-    test('ignores the search term for now', () async {
-      await loadAlbum(
-        Album(
-          teams: [
-            TeamAlbumGroup(team: _brazil, stickers: [position('BRA-1', 1)]),
-            TeamAlbumGroup(team: _argentina, stickers: [position('ARG-1', 1)]),
+    Album twoTeamsAndSpecials() => Album(
+      teams: [
+        TeamAlbumGroup(
+          team: _brazil,
+          stickers: [
+            position('BRA-1', 1, status: StickerStatus.owned),
+            position('BRA-2', 2),
+            position('BRA-10', 10),
           ],
-          loose: const [],
         ),
-      );
+        TeamAlbumGroup(
+          team: _argentina,
+          stickers: [position('ARG-1', 1), position('ARG-2', 2)],
+        ),
+      ],
+      loose: [position('FWC-1', 1), position('FWC-2', 2)],
+    );
 
-      expect(viewModel.sectionsMatching('argentina'), hasLength(2));
-      expect(viewModel.sectionsMatching('   '), hasLength(2));
+    List<String> namesFor(String term) =>
+        viewModel.sectionsMatching(term).map((s) => s.name).toList();
+
+    test('a blank term keeps every section and sticker', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final sections = viewModel.sectionsMatching('   ');
+
+      expect(sections.map((s) => s.name), ['Brazil', 'Argentina', 'ESPECIAIS']);
+      expect(sections.map((s) => s.stickers.length), [3, 2, 2]);
     });
 
-    test('shows a partial progress when a status filter is active', () async {
-      await loadAlbum(
-        Album(
-          teams: [
-            TeamAlbumGroup(
-              team: _brazil,
-              stickers: [position('BRA-3', 3), position('BRA-4', 4)],
-            ),
-          ],
-          loose: const [],
-        ),
-      );
+    test('a term matching the team name keeps all its stickers', () async {
+      await loadAlbum(twoTeamsAndSpecials());
 
-      expect(viewModel.sectionsMatching('').single.progress, '0 / 2');
+      final sections = viewModel.sectionsMatching('brazil');
+
+      expect(sections.map((s) => s.name), ['Brazil']);
+      expect(sections.single.stickers, hasLength(3));
     });
+
+    test('the search ignores case and surrounding spaces', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      expect(namesFor('  BrAzIl '), ['Brazil']);
+    });
+
+    test('a term matching sticker codes keeps only those stickers', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final sections = viewModel.sectionsMatching('bra-1');
+
+      expect(sections.map((s) => s.name), ['Brazil']);
+      expect(sections.single.stickers.map((s) => s.code), ['BRA-1', 'BRA-10']);
+    });
+
+    test('a number term matches the codes that contain it', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final sections = viewModel.sectionsMatching('1');
+
+      expect(sections.map((s) => s.name), ['Brazil', 'Argentina', 'ESPECIAIS']);
+      expect(sections.map((s) => s.stickers.length), [2, 1, 1]);
+    });
+
+    test('the team code reaches the stickers of that team', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final sections = viewModel.sectionsMatching('arg');
+
+      expect(sections.map((s) => s.name), ['Argentina']);
+      expect(sections.single.stickers, hasLength(2));
+    });
+
+    test('the special section is found by its name', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final sections = viewModel.sectionsMatching('especiais');
+
+      expect(sections.map((s) => s.name), ['ESPECIAIS']);
+      expect(sections.single.stickers, hasLength(2));
+    });
+
+    test('drops the sections that have no match', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      expect(viewModel.sectionsMatching('zzz'), isEmpty);
+    });
+
+    test('shows collected over total without filters or search', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      final progress = viewModel.sectionsMatching('').map((s) => s.progress);
+
+      expect(progress, ['1 / 3', '0 / 2', '0 / 2']);
+    });
+
+    test('shows the item count while searching', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      expect(viewModel.sectionsMatching('brazil').single.progress, '3 itens');
+      expect(viewModel.sectionsMatching('bra-10').single.progress, '1 Item');
+    });
+
+    test('the item count follows the matched stickers', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      expect(viewModel.sectionsMatching('bra-1').single.progress, '2 itens');
+    });
+
+    test('shows the item count when a status filter is active', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      viewModel.selectedStatus(StickerStatus.missing);
+      await _settle();
+
+      expect(viewModel.sectionsMatching('').first.progress, '3 itens');
+    });
+
+    test('shows the item count when a team filter is active', () async {
+      await loadAlbum(twoTeamsAndSpecials());
+
+      viewModel.toggleTeam('BRA');
+      await _settle();
+
+      expect(viewModel.sectionsMatching('').first.progress, '3 itens');
+    });
+
+    test(
+      'goes back to collected over total when the filters are cleared',
+      () async {
+        await loadAlbum(twoTeamsAndSpecials());
+        viewModel.toggleTeam('BRA');
+        await _settle();
+        viewModel.toggleTeam('BRA');
+        await _settle();
+
+        expect(viewModel.sectionsMatching('').first.progress, '1 / 3');
+      },
+    );
   });
 }

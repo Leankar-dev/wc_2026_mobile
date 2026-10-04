@@ -319,7 +319,7 @@ void main() {
       expect(find.text('— FALTANDO —'), findsNWidgets(3));
     });
 
-    testWidgets('keeps the blocks when the search text changes', (
+    testWidgets('filters the blocks by what is typed in the search', (
       tester,
     ) async {
       _albums.album = Result.ok(album());
@@ -328,7 +328,54 @@ void main() {
       await tester.enterText(find.byType(TextField), 'argentina');
       await tester.pump();
 
+      final blocks = tester
+          .widgetList<TeamSelection>(find.byType(TeamSelection))
+          .toList();
+
+      expect(blocks.map((block) => block.name), ['Argentina']);
+      expect(blocks.single.progress, '3 itens');
+      expect(find.byType(StickerTile), findsNWidgets(3));
+    });
+
+    testWidgets('keeps only the stickers whose code matches', (tester) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+      await tester.enterText(find.byType(TextField), 'fwc');
+      await tester.pump();
+
+      final blocks = tester
+          .widgetList<TeamSelection>(find.byType(TeamSelection))
+          .toList();
+
+      expect(blocks.map((block) => block.name), ['ESPECIAIS']);
+      expect(blocks.single.progress, '1 Item');
+    });
+
+    testWidgets('restores every block when the search is cleared', (
+      tester,
+    ) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+      await tester.enterText(find.byType(TextField), 'argentina');
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pump();
+
       expect(find.byType(TeamSelection), findsNWidgets(3));
+      expect(find.text('1 / 2'), findsOneWidget);
+    });
+
+    testWidgets('shows the empty message when nothing matches', (tester) async {
+      _albums.album = Result.ok(album());
+
+      await _openAlbum(tester);
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pump();
+
+      expect(find.byType(TeamSelection), findsNothing);
+      expect(find.text('Nenhuma figurinha neste recorte'), findsOneWidget);
     });
 
     testWidgets('clears the team filter when the same team is tapped twice', (
