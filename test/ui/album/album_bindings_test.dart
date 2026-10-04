@@ -13,6 +13,21 @@ import 'package:wc_2026_mobile/ui/album/album_bindings.dart';
 import 'package:wc_2026_mobile/ui/album/album_view_model.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
+  @override
+  Future<Result<void>> registerSticker({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> updateStickerQuantity({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> removeSticker(String code) async => Result.done;
+
   var albumCalls = 0;
   var summaryCalls = 0;
 

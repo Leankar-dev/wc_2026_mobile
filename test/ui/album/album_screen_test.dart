@@ -28,6 +28,21 @@ import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
+  @override
+  Future<Result<void>> registerSticker({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> updateStickerQuantity({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> removeSticker(String code) async => Result.done;
+
   Result<AlbumSummary> summary = Result.ok(
     const AlbumSummary(total: 980, missing: 300, repeated: 12),
   );

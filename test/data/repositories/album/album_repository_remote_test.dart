@@ -8,6 +8,7 @@ import 'package:wc_2026_mobile/data/services/api/model/album/album_api_model.dar
 import 'package:wc_2026_mobile/data/services/api/model/album/album_position_api_model.dart';
 import 'package:wc_2026_mobile/data/services/api/model/album/album_summary_api_model.dart';
 import 'package:wc_2026_mobile/data/services/api/model/album/recent_sticker_api_model.dart';
+import 'package:wc_2026_mobile/data/services/api/model/album/sticker_quantity_request.dart';
 import 'package:wc_2026_mobile/data/services/api/model/album/team_album_group_api_model.dart';
 import 'package:wc_2026_mobile/data/services/api/model/team/team_api_model.dart';
 import 'package:wc_2026_mobile/domain/models/album/album.dart';
@@ -19,6 +20,28 @@ import 'package:wc_2026_mobile/domain/models/album/team_album_group.dart';
 import 'package:wc_2026_mobile/domain/models/team/team.dart';
 
 class _FakeAlbumApi implements AlbumApi {
+  final registered = <StickerQuantityRequest>[];
+  final updated = <StickerQuantityRequest>[];
+  final removed = <String>[];
+
+  @override
+  Future<void> registerSticker(StickerQuantityRequest request) async {
+    _failIfNeeded();
+    registered.add(request);
+  }
+
+  @override
+  Future<void> updateStickerQuantity(StickerQuantityRequest request) async {
+    _failIfNeeded();
+    updated.add(request);
+  }
+
+  @override
+  Future<void> removeSticker(String code) async {
+    _failIfNeeded();
+    removed.add(code);
+  }
+
   Object? failure;
   AlbumApiModel album = const AlbumApiModel(teams: [], loose: []);
   AlbumSummaryApiModel summary = const AlbumSummaryApiModel(
@@ -219,6 +242,127 @@ void main() {
         _errorOf(await repository.getRecentStickers()),
         isA<NotFoundException>(),
       );
+    });
+  });
+
+  group('AlbumRepositoryRemote.registerSticker', () {
+    test('sends the code and the quantity', () async {
+      final result = await repository.registerSticker(
+        code: 'BRA-1',
+        quantity: 2,
+      );
+
+      expect(result, isA<Ok<void>>());
+      expect(api.registered, [
+        const StickerQuantityRequest(code: 'BRA-1', quantity: 2),
+      ]);
+      expect(api.updated, isEmpty);
+      expect(api.removed, isEmpty);
+    });
+
+    test('maps a connection failure to a network error', () async {
+      api.failure = _dioError(DioExceptionType.connectionError);
+
+      final result = await repository.registerSticker(
+        code: 'BRA-1',
+        quantity: 1,
+      );
+
+      expect(_errorOf(result), isA<NetworkException>());
+    });
+
+    test('maps a conflict to an unknown error for now', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 409);
+
+      final result = await repository.registerSticker(
+        code: 'BRA-1',
+        quantity: 1,
+      );
+
+      expect(_errorOf(result), isA<UnknownException>());
+    });
+
+    test('maps invalid data to a validation error', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 422);
+
+      final result = await repository.registerSticker(
+        code: 'BRA-1',
+        quantity: 0,
+      );
+
+      expect(_errorOf(result), isA<ValidationException>());
+    });
+  });
+
+  group('AlbumRepositoryRemote.updateStickerQuantity', () {
+    test('sends the code and the quantity', () async {
+      final result = await repository.updateStickerQuantity(
+        code: 'ARG-3',
+        quantity: 5,
+      );
+
+      expect(result, isA<Ok<void>>());
+      expect(api.updated, [
+        const StickerQuantityRequest(code: 'ARG-3', quantity: 5),
+      ]);
+      expect(api.registered, isEmpty);
+    });
+
+    test('maps a 401 to an unauthorized error', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 401);
+
+      final result = await repository.updateStickerQuantity(
+        code: 'ARG-3',
+        quantity: 5,
+      );
+
+      expect(_errorOf(result), isA<UnauthorizedException>());
+    });
+
+    test('maps a 500 to a server error', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 500);
+
+      final result = await repository.updateStickerQuantity(
+        code: 'ARG-3',
+        quantity: 5,
+      );
+
+      expect(_errorOf(result), isA<ServerException>());
+    });
+  });
+
+  group('AlbumRepositoryRemote.removeSticker', () {
+    test('sends only the code', () async {
+      final result = await repository.removeSticker('FWC-2');
+
+      expect(result, isA<Ok<void>>());
+      expect(api.removed, ['FWC-2']);
+      expect(api.registered, isEmpty);
+      expect(api.updated, isEmpty);
+    });
+
+    test('maps a missing sticker to a not found error', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 404);
+
+      final result = await repository.removeSticker('FWC-2');
+
+      expect(_errorOf(result), isA<NotFoundException>());
+    });
+
+    test('maps a timeout to a network error', () async {
+      api.failure = _dioError(DioExceptionType.sendTimeout);
+
+      final result = await repository.removeSticker('FWC-2');
+
+      expect(_errorOf(result), isA<NetworkException>());
+    });
+
+    test('does not record the call when the request fails', () async {
+      api.failure = _dioError(DioExceptionType.badResponse, status: 500);
+
+      await repository.removeSticker('FWC-2');
+
+      expect(api.removed, isEmpty);
     });
   });
 }

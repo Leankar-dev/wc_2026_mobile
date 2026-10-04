@@ -17,6 +17,21 @@ import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/album/album_view_model.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
+  @override
+  Future<Result<void>> registerSticker({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> updateStickerQuantity({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> removeSticker(String code) async => Result.done;
+
   Result<Album> album = Result.ok(const Album(teams: [], loose: []));
   Result<AlbumSummary> summary = Result.ok(
     const AlbumSummary(total: 980, missing: 300, repeated: 12),

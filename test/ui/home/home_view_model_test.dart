@@ -12,6 +12,21 @@ import 'package:wc_2026_mobile/ui/core/theme/theme.dart';
 import 'package:wc_2026_mobile/ui/home/home_view_model.dart';
 
 class _FakeAlbumRepository implements AlbumRepository {
+  @override
+  Future<Result<void>> registerSticker({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> updateStickerQuantity({
+    required String code,
+    required int quantity,
+  }) async => Result.done;
+
+  @override
+  Future<Result<void>> removeSticker(String code) async => Result.done;
+
   _FakeAlbumRepository({required this.summary, required this.recent});
 
   Result<AlbumSummary> summary;
