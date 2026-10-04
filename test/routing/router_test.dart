@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' as flutter show MaterialApp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -18,6 +19,9 @@ import 'package:wc_2026_mobile/routing/routes.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/detail_screen.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/widgets/backdrop.dart';
 import 'package:wc_2026_mobile/ui/sticker/detail/widgets/top_bar.dart';
+import 'package:wc_2026_mobile/ui/sticker/register/sticker_register_screen.dart';
+import 'package:wc_2026_mobile/ui/sticker/register/widgets/code_field.dart';
+import 'package:wc_2026_mobile/ui/sticker/register/widgets/keypad.dart';
 
 class _FakeAuthSessionRepository implements AuthSessionRepository {
   @override
@@ -87,13 +91,23 @@ AuthSessionNotifier _signedInNotifier() {
 
 Future<GoRouter> _openApp(
   WidgetTester tester,
-  AuthSessionNotifier notifier,
-) async {
+  AuthSessionNotifier notifier, {
+  bool flutterMaterial = false,
+}) async {
   tester.view.physicalSize = Size(390, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
   final appRouter = router(notifier);
+
+  Widget scaled(BuildContext context, Widget? child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(0.8)),
+    child: child!,
+  );
+
+  final app = flutterMaterial
+      ? flutter.MaterialApp.router(routerConfig: appRouter, builder: scaled)
+      : MaterialApp.router(routerConfig: appRouter, builder: scaled);
 
   await tester.pumpWidget(
     MultiProvider(
@@ -101,15 +115,7 @@ Future<GoRouter> _openApp(
         ChangeNotifierProvider<AuthSessionNotifier>.value(value: notifier),
         Provider<AlbumRepository>.value(value: _FakeAlbumRepository()),
       ],
-      child: MaterialApp.router(
-        routerConfig: appRouter,
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(0.8)),
-          child: child!,
-        ),
-      ),
+      child: app,
     ),
   );
   await tester.pump();
@@ -174,6 +180,70 @@ void main() {
 
       expect(find.text('SALVAR'), findsOneWidget);
       expect(find.text('EXCLUIR FIGURINHA'), findsOneWidget);
+
+      notifier.dispose();
+    });
+
+    testWidgets('opens the register screen on the register location', (
+      tester,
+    ) async {
+      final notifier = _signedInNotifier();
+      final appRouter = await _openApp(
+        tester,
+        notifier,
+        flutterMaterial: true,
+      );
+
+      appRouter.go(Routes.stickerRegister);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(StickerRegisterScreen), findsOneWidget);
+      expect(find.byType(DetailScreen), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      notifier.dispose();
+    });
+
+    testWidgets('opens the register screen without any extra data', (
+      tester,
+    ) async {
+      final notifier = _signedInNotifier();
+      final appRouter = await _openApp(
+        tester,
+        notifier,
+        flutterMaterial: true,
+      );
+
+      appRouter.go(Routes.stickerRegister);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(CodeField), findsOneWidget);
+      expect(find.byType(Keypad), findsNWidgets(2));
+
+      notifier.dispose();
+    });
+
+    testWidgets('still opens the detail after the register screen', (
+      tester,
+    ) async {
+      final notifier = _signedInNotifier();
+      final appRouter = await _openApp(
+        tester,
+        notifier,
+        flutterMaterial: true,
+      );
+
+      appRouter.go(Routes.stickerRegister);
+      await tester.pump();
+      await tester.pump();
+      appRouter.go(Routes.sticker('BRA-1'), extra: _args);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(DetailScreen), findsOneWidget);
+      expect(find.byType(StickerRegisterScreen), findsNothing);
 
       notifier.dispose();
     });

@@ -37,5 +37,22 @@ void main() {
         ]),
       );
     });
+
+    test('names the register location', () {
+      expect(Routes.stickerRegister, '/sticker/register');
+    });
+
+    test('keeps the register route private', () {
+      expect(Routes.public, isNot(contains(Routes.stickerRegister)));
+    });
+
+    test('lets the register location match the detail pattern too', () {
+      final pattern = RegExp(
+        '^${Routes.stickerPath.replaceAll(':code', '([^/]+)')}\$',
+      );
+
+      expect(pattern.hasMatch(Routes.stickerRegister), isTrue);
+      expect(pattern.firstMatch(Routes.stickerRegister)?.group(1), 'register');
+    });
   });
 }
